@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 
   moveit::planning_interface::MoveGroupInterface::Plan my_plan;
 
-  if (!_nh.getParam("/move_group/planning_plugin", planner_plugin_name))
+  if (!_nh.getParam("/move_group/planning_pipelines/ompl/planning_plugin", planner_plugin_name))
     ROS_FATAL_STREAM("Could not find planner plugin name");
   try
   {
@@ -176,10 +176,21 @@ int main(int argc, char **argv)
 
   skywalker_moveit_control skywalker_moveit_control_object = skywalker_moveit_control(_nh, PLANNING_GROUP);
 
+  end_effector_pos.pose.position.x = 0.4;
+  end_effector_pos.pose.position.y = 0.3;
+  end_effector_pos.pose.position.z = 0.8;
+  end_effector_pos.pose.orientation.x = 0;
+  end_effector_pos.pose.orientation.y = 0;
+  end_effector_pos.pose.orientation.z = 0;
+  end_effector_pos.pose.orientation.w = 1;
+  end_effector_pos.header.frame_id = "ur53_base_link";
+
   while(ros::ok())
   {
     joint_to_send = skywalker_moveit_control_object.IK_compute(end_effector_pos);
     joint_pub.publish(joint_to_send);
+
+    ROS_INFO_STREAM(joint_to_send);
 
     //TODO
     //check for to_plan var
