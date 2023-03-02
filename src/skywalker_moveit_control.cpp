@@ -27,6 +27,8 @@
 
 #include <boost/scoped_ptr.hpp>
 
+
+//do something with this class until it becomes a mess!
 class skywalker_moveit_control
 {
 private:
@@ -57,7 +59,9 @@ public:
 
   sensor_msgs::JointState IK_compute(geometry_msgs::PoseStamped);
 
-  //work for future: make a traj preview request
+
+  //TODO
+  //make a traj preview request
 };
 
 
@@ -71,7 +75,7 @@ sensor_msgs::JointState skywalker_moveit_control::IK_compute(geometry_msgs::Pose
   //filling last pieces of request
   _request_ik.request.ik_request.pose_stamped = end_effector_position;
   //ROS_INFO_STREAM(_request_ik.request);
-  _request_ik.request.ik_request.pose_stamped.header.frame_id = "base_footprint";
+  // _request_ik.request.ik_request.pose_stamped.header.frame_id = "ur5_base_link";
   
   if (_client_ik.call(_request_ik))//sending the request
   {
@@ -112,9 +116,9 @@ int main(int argc, char **argv)
   ros::Subscriber toplanCb = _nh.subscribe(
     "unity/to_plan",1, planCb); //for now querry better be 1
 
-  ros::Publisher isSentPub = _nh.advertise<std_msgs::Bool>("/toSend",10);
+  ros::Publisher isSentPub = _nh.advertise<std_msgs::Bool>("/ros/is_done",10);
 
-  ros::Publisher joint_pub = _nh.advertise<sensor_msgs::JointState>("/querry_joint",10);
+  ros::Publisher joint_pub = _nh.advertise<sensor_msgs::JointState>("/querry_states",10);
 
   moveit::planning_interface::MoveGroupInterface
     move_group_interface(PLANNING_GROUP);
@@ -167,7 +171,7 @@ int main(int argc, char **argv)
     std::stringstream ss;
     for (const auto& cls : classes)
       ss << cls << " ";
-    ROS_ERROR_STREAM("yException while loading planner '" << planner_plugin_name << "': " << ex.what() << std::endl
+    ROS_ERROR_STREAM("Exception while loading planner '" << planner_plugin_name << "': " << ex.what() << std::endl
                                                          << "Available plugins: " << ss.str());
   }
   
@@ -176,48 +180,46 @@ int main(int argc, char **argv)
 
   skywalker_moveit_control skywalker_moveit_control_object = skywalker_moveit_control(_nh, PLANNING_GROUP);
 
-  end_effector_pos.pose.position.x = 0.4;
-  end_effector_pos.pose.position.y = 0.3;
-  end_effector_pos.pose.position.z = 0.8;
-  end_effector_pos.pose.orientation.x = 0;
-  end_effector_pos.pose.orientation.y = 0;
-  end_effector_pos.pose.orientation.z = 0;
-  end_effector_pos.pose.orientation.w = 1;
-  end_effector_pos.header.frame_id = "ur53_base_link";
+  // end_effector_pos.pose.position.x = 0.4;
+  // end_effector_pos.pose.position.y = 0.3;
+  // end_effector_pos.pose.position.z = 0.8;
+  // end_effector_pos.pose.orientation.x = 0;
+  // end_effector_pos.pose.orientation.y = 0;
+  // end_effector_pos.pose.orientation.z = 0;
+  // end_effector_pos.pose.orientation.w = 1;
+  // end_effector_pos.header.frame_id = "ur5_base_link";
 
   while(ros::ok())
   {
     joint_to_send = skywalker_moveit_control_object.IK_compute(end_effector_pos);
     joint_pub.publish(joint_to_send);
 
+    // ROS_INFO_STREAM(joint_to_send);
+
     ROS_INFO_STREAM(joint_to_send);
+    ROS_INFO_STREAM(end_effector_pos);
+    moveit::core::RobotState goal_state(robot_model);
+    std::vector<double> joint_value;
+
+    moveit::core::RobotStatePtr current_state = move_group_interface.getCurrentState();
+    std::vector<double> joint_group_positions;
+    current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
+
+    joint_group_positions = joint_to_send.position;
+    move_group_interface.setJointValueTarget(joint_group_positions);
+    //change to actually have a trajectory as a preview.
+    bool success = false; 
+    // bool success = (move_group_interface.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
     //TODO
-    //check for to_plan var
+    //create a function to downsample the trajectory to n states and publish it to be visualized by unity.
 
-    if(toPlan)
+    if (success && toPlan)
     {
-      ROS_INFO_STREAM("Time to execute.");
-      ROS_INFO_STREAM(joint_to_send);
-      moveit::core::RobotState goal_state(robot_model);
-      std::vector<double> joint_value;
-
-      moveit::core::RobotStatePtr current_state = move_group_interface.getCurrentState();
-      std::vector<double> joint_group_positions;
-      current_state->copyJointGroupPositions(joint_model_group, joint_group_positions);
-
-      joint_group_positions = joint_to_send.position;
-      move_group_interface.setJointValueTarget(joint_group_positions);
-      //change to actually have a trajectory as a preview. 
-      bool success = (move_group_interface.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-      if (success)
-      {
-          move_group_interface.execute(my_plan);
-      }
-
+      move_group_interface.execute(my_plan);
       std_msgs::Bool isSent;
       isSent.data = false;
-      isSentPub.publish(isSent);
+      isSentPub.publish(isSent); 
     }
 
     loop_rate.sleep();
